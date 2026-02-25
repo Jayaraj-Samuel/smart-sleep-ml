@@ -2,8 +2,14 @@ import streamlit as st
 import cv2
 import numpy as np
 from PIL import Image
-import sounddevice as sd
 import joblib
+
+# ---------------- CLOUD-SAFE MICROPHONE IMPORT -----------------
+try:
+    import sounddevice as sd
+    MIC_AVAILABLE = True
+except:
+    MIC_AVAILABLE = False
 
 # --------------------------------------------------
 # Page Configuration
@@ -15,7 +21,7 @@ st.set_page_config(
 )
 
 # --------------------------------------------------
-# Global UI Styling (Dribbble-style Dashboard)
+# Global UI Styling (Dribbble-style dashboard)
 # --------------------------------------------------
 st.markdown("""
 <style>
@@ -87,9 +93,15 @@ with col1:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='card-title'>💡 Light Detection</div>", unsafe_allow_html=True)
 
+    # Cloud-safe: camera only local
+    if st.runtime.exists():
+        method_options = ("Upload Room Image",)
+    else:
+        method_options = ("Upload Room Image", "Use Camera")
+
     method = st.radio(
         "Input Method",
-        ("Upload Room Image", "Use Camera"),
+        method_options,
         horizontal=True
     )
 
@@ -110,10 +122,10 @@ with col1:
             img_array = np.array(image)
             gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
             light_level = int(np.mean(gray) / 255 * 100)
+            st.image(image, use_column_width=True)
 
     st.markdown(f"<div class='card-value'>{light_level}/100</div>", unsafe_allow_html=True)
     st.progress(light_level / 100)
-
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------- NOISE SENSOR ---------------------
@@ -125,26 +137,25 @@ with col2:
     fs = 44100
     noise_level = 30
 
-    if st.button("🎙️ Record Noise"):
-        recording = sd.rec(
-            int(duration * fs),
-            samplerate=fs,
-            channels=1,
-            device=8
-        )
-        sd.wait()
-
-        audio = recording.flatten()
-        rms = np.sqrt(np.mean(audio**2)) if len(audio) > 0 else 0
-
-        if np.isnan(rms) or np.isinf(rms):
-            rms = 0
-
-        noise_level = int(min(max(rms * 1000, 0), 100))
+    if MIC_AVAILABLE:
+        if st.button("🎙️ Record Noise"):
+            recording = sd.rec(
+                int(duration * fs),
+                samplerate=fs,
+                channels=1
+            )
+            sd.wait()
+            audio = recording.flatten()
+            rms = np.sqrt(np.mean(audio**2)) if len(audio) > 0 else 0
+            if np.isnan(rms) or np.isinf(rms):
+                rms = 0
+            noise_level = int(min(max(rms * 1000, 0), 100))
+    else:
+        st.warning("🎤 Live microphone not available on cloud")
+        noise_level = st.slider("Set Noise Level", 0, 100, 30)
 
     st.markdown(f"<div class='card-value'>{noise_level}/100</div>", unsafe_allow_html=True)
     st.progress(noise_level / 100)
-
     st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------------------------------
