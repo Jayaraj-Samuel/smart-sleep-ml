@@ -9,10 +9,44 @@ import joblib
 # Page Configuration
 # --------------------------------------------------
 st.set_page_config(
-    page_title="Smart Sleep Predictor",
+    page_title="Smart Sleep AI",
     page_icon="😴",
     layout="wide"
 )
+
+# --------------------------------------------------
+# Global UI Styling (Dribbble-style Dashboard)
+# --------------------------------------------------
+st.markdown("""
+<style>
+body {
+    background: linear-gradient(135deg, #0E1117, #151A2D);
+    color: white;
+}
+.block-container {
+    padding-top: 1.5rem;
+}
+.card {
+    background: #1C203B;
+    padding: 20px;
+    border-radius: 18px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    margin-bottom: 20px;
+}
+.card-title {
+    font-size: 14px;
+    color: #A5B4FC;
+}
+.card-value {
+    font-size: 30px;
+    font-weight: bold;
+    margin-top: 5px;
+}
+.sidebar .sidebar-content {
+    background: #0E1117;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # --------------------------------------------------
 # Load ML Models
@@ -23,85 +57,84 @@ quality_model = joblib.load("sleep_quality_model.pkl")
 # --------------------------------------------------
 # Sidebar - Manual Inputs
 # --------------------------------------------------
-st.sidebar.header("🛠️ Manual Inputs")
+with st.sidebar:
+    st.title("😴 Smart Sleep AI")
+    st.caption("Environment-aware sleep prediction")
 
-temperature = st.sidebar.slider("🌡️ Room Temperature (°C)", 10, 40, 25)
-heart_rate = st.sidebar.number_input(
-    "❤️ Heart Rate (BPM)",
-    min_value=40,
-    max_value=200,
-    value=70
-)
-st.sidebar.info(f"🫀 Current Heart Rate: {heart_rate} BPM")
-
-# --------------------------------------------------
-# Main Title
-# --------------------------------------------------
-st.title("😴 Smart Sleep Predictor")
-st.caption("AI-powered sleep time & quality prediction using real environmental data")
-
-# Layout columns
-col1, col2 = st.columns(2)
-
-# --------------------------------------------------
-# Light Detection (Camera / Upload)
-# --------------------------------------------------
-with col1:
-    st.subheader("💡 Light Detection")
-
-    method = st.radio(
-        "Choose light input method:",
-        ("Use Camera (if available)", "Upload Room Image")
+    temperature = st.slider("🌡️ Room Temperature (°C)", 10, 40, 25)
+    heart_rate = st.number_input(
+        "❤️ Heart Rate (BPM)",
+        min_value=40,
+        max_value=200,
+        value=70
     )
 
-    light_level = 50  # default
+    st.info(f"🫀 Current Heart Rate: {heart_rate} BPM")
 
-    if method == "Use Camera (if available)":
+# --------------------------------------------------
+# Main Header
+# --------------------------------------------------
+st.markdown("## 🌙 Sleep Environment Dashboard")
+st.caption("Real-time sensor inputs & AI predictions")
+
+# --------------------------------------------------
+# Sensor Section
+# --------------------------------------------------
+col1, col2 = st.columns(2)
+
+# ---------------- LIGHT SENSOR ---------------------
+with col1:
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.markdown("<div class='card-title'>💡 Light Detection</div>", unsafe_allow_html=True)
+
+    method = st.radio(
+        "Input Method",
+        ("Upload Room Image", "Use Camera"),
+        horizontal=True
+    )
+
+    light_level = 50
+
+    if method == "Use Camera":
         cam_img = st.camera_input("Capture room image")
         if cam_img:
             img_array = np.asarray(bytearray(cam_img.read()), dtype=np.uint8)
             image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             light_level = int(np.mean(gray) / 255 * 100)
-            st.success(f"Detected Light Level: {light_level}/100")
 
     if method == "Upload Room Image":
-        uploaded_img = st.file_uploader(
-            "Upload room image",
-            type=["jpg", "png", "jpeg"]
-        )
+        uploaded_img = st.file_uploader("Upload image", type=["jpg", "png", "jpeg"])
         if uploaded_img:
             image = Image.open(uploaded_img)
             img_array = np.array(image)
             gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
             light_level = int(np.mean(gray) / 255 * 100)
-            st.image(image, use_column_width=True)
-            st.success(f"Detected Light Level: {light_level}/100")
 
-# --------------------------------------------------
-# Noise Detection (Microphone)
-# --------------------------------------------------
+    st.markdown(f"<div class='card-value'>{light_level}/100</div>", unsafe_allow_html=True)
+    st.progress(light_level / 100)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------------- NOISE SENSOR ---------------------
 with col2:
-    st.subheader("🎤 Noise Detection")
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.markdown("<div class='card-title'>🎤 Noise Level</div>", unsafe_allow_html=True)
 
-    duration = 3  # seconds
+    duration = 3
     fs = 44100
+    noise_level = 30
 
-    noise_level = 30  # default fallback
-
-    if st.button("🎙️ Record Room Noise"):
-        st.info("Recording... please stay quiet")
-
+    if st.button("🎙️ Record Noise"):
         recording = sd.rec(
             int(duration * fs),
             samplerate=fs,
             channels=1,
-            device=8  # YOUR MICROPHONE DEVICE ID
+            device=8
         )
         sd.wait()
 
         audio = recording.flatten()
-
         rms = np.sqrt(np.mean(audio**2)) if len(audio) > 0 else 0
 
         if np.isnan(rms) or np.isinf(rms):
@@ -109,18 +142,15 @@ with col2:
 
         noise_level = int(min(max(rms * 1000, 0), 100))
 
-        if noise_level == 0:
-            st.info("Low or no ambient noise detected.")
-        else:
-            st.success(f"Detected Noise Level: {noise_level}/100")
+    st.markdown(f"<div class='card-value'>{noise_level}/100</div>", unsafe_allow_html=True)
+    st.progress(noise_level / 100)
 
-    else:
-        st.info("Click the button to record room noise.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
 # --------------------------------------------------
 # Prediction Section
 # --------------------------------------------------
-st.markdown("---")
-st.subheader("🧠 Sleep Prediction")
+st.markdown("## 🧠 AI Sleep Prediction")
 
 if st.button("🔮 Predict Sleep"):
     features = [[temperature, light_level, noise_level, heart_rate]]
@@ -128,14 +158,20 @@ if st.button("🔮 Predict Sleep"):
     sleep_time = time_model.predict(features)[0]
     sleep_quality = quality_model.predict(features)[0]
 
-    # Round outputs
     sleep_time = round(float(sleep_time), 1)
     sleep_quality = round(float(sleep_quality), 0)
 
     colA, colB = st.columns(2)
 
     with colA:
-        st.metric("🕒 Time to Fall Asleep (minutes)", sleep_time)
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("<div class='card-title'>🕒 Time to Fall Asleep</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card-value'>{sleep_time} min</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with colB:
-        st.metric("⭐ Sleep Quality Score", f"{sleep_quality}/100")
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("<div class='card-title'>⭐ Sleep Quality</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='card-value'>{sleep_quality}/100</div>", unsafe_allow_html=True)
+        st.progress(sleep_quality / 100)
+        st.markdown("</div>", unsafe_allow_html=True)
